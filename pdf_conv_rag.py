@@ -22,66 +22,53 @@ def get_text_chunks_langchain(context):
     return text_chunks
 
 
-context = """Deepak Mishra founded ABC Logistics.
-            Profile of ABC Logistics ABC Logistics is one of India’s
-             premier Express Distribution and Supply Chain Management
-               companies, committed to delighting customers
-         with seamless, end-to-end logistics solutions backed
-           by future-ready digital tools and technology. 
-           Founded in 1989, with renowned expertise in surface
-             and air express as well as customized solutions
-               for retail and MSME sectors, ABC Logistics gives 
-               businesses the added advantage of an unmatched network.
-                 ABC’s coverage spans the whole of India, 
-                 bolstering businesses with access
-                   to more than 19,800 PIN Codes and 735 of India’s 739 districts. 
-            After strategically acquiring ABC Logistics in 2020, 
-            Allcargo Logistics is now the promoter and 
-            the single largest shareholder of ABC Logistics.
-            As part of Allcargo Group, ABC Logistics is 
-            uniquely equipped to offer truly end-to-end integrated 
-            logistics with services across diverse verticals 
-            that include International Supply Chain, CFS-ICD, 
-            Contract Logistics, Logistics Parks, and more. 
-            Further, businesses aspiring to broaden their horizons 
-            can tap into a global network operating in 180 countries. 
-            With a digital-first approach, plethora of 
-            tools like digital payment modes, enterprise-wide ERP systems, 
-            ABC Logistics Genie chatbot on WhatsApp, etc. 
-            ABC looks ahead to delighting customers and enabling swift, 
-            safe and timely deliveries, every single time. 
-            As a responsible corporate citizen, 
-            ABC Logistics is conscious of its environmental 
-            impact and abides by its core value of ‘Care for Environment 
-            and Society’ to adhere to world-class Environmental Social
-              and Governance (ESG) standards and contribute to a better world."""
+
 
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.schema.messages import HumanMessage, SystemMessage, AIMessage
 
+
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import CharacterTextSplitter
+loader = PyPDFLoader("b1.pdf")
+
+text = loader.load()
+
+text_splitter = CharacterTextSplitter(separator="\n", chunk_size=1000, chunk_overlap=100, length_function=len)
+text_chunks = text_splitter.split_documents(text)
+
 max_tokens = 20
 temperature = .4
-text_chunks = get_text_chunks_langchain(context)
+
+
 
 embed_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-        
-embeddings = HuggingFaceEmbeddings(model_name=embed_model, model_kwargs={'device': 'cpu'})
-vector_store = FAISS.from_documents(text_chunks, embedding=embeddings)
-#print("LEN VEC STORE :: ", len(vector_store))
 
-retriever = vector_store.as_retriever()
-print("--------------------")
-#print(retriever)
-#print(dir(retriever))
+embeddings = HuggingFaceEmbeddings(model_name=embed_model, model_kwargs={'device': 'cpu'})
+
+
+
+
+vector_store = FAISS.from_documents(text_chunks, embedding=embeddings, normalize_L2=True)
+retriever = vector_store.as_retriever(search_type = "similarity_score_threshold",search_kwargs={"k":4, "score_threshold": .4})
+
+
+# test retriever is 
+query = "What is Algorithmic Trading?"
+filtered_docs = retriever.get_relevant_documents(query)
+print(query)
+print("DOCS. FILTERED", filtered_docs)
+print("LEN :: ", len(filtered_docs))
 
 query = "Who is Modi?"
 filtered_docs = retriever.get_relevant_documents(query)
+print(query)
+print("DOCS. FILTERED", filtered_docs)
+print("LEN :: ", len(filtered_docs))
 
-print("DOCS. FILTERED",filtered_docs)
 
-
-
+# exit()
 
 # Working ok with following phi3 conf
 from langchain_community.chat_models import ChatOllama
@@ -182,8 +169,10 @@ history_aware_retriever = create_history_aware_retriever(
 system_prompt = (
     "You are an assistant for question-answering tasks. "
     "Use the following pieces of retrieved context to answer "
-    "the question. If you don't know the answer, say that you "
-    "don't know. Use three sentences maximum and keep the "
+    "the question. If you don't know the answer , say that you "
+    "don't know." 
+    "If questions are asked where there is no relevant context available, please say I don't know"
+    "Use three sentences maximum and keep the "
     "answer concise."
     "\n\n"
     "{context}"
@@ -229,7 +218,7 @@ while True:
     },  # constructs a key "abc123" in `store`.
     )
     print("----------------------------")
-    print("HISTORY :: ", result['context'])
+    print("CONTEXT :: ", result['context'])
     print("========================================")
     print("RESULT :: ", result['answer'])
     print("------------------------------\n")
